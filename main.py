@@ -18,7 +18,9 @@ FEEDS_PATH = os.path.join(BASE_DIR, "feeds.json")
 REFRESH_MINUTES = int(os.environ.get("REFRESH_MINUTES", "120"))
 
 app = FastAPI()
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+os.makedirs(STATIC_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
