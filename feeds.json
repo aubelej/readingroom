@@ -1,0 +1,28 @@
+[
+  {
+    "name": "Reading Research Quarterly",
+    "url": "https://ila.onlinelibrary.wiley.com/action/showFeed?jc=19362722&type=etoc&feed=rss"
+  },
+  {
+    "name": "American Journal of Evaluation",
+    "url": "https://journals.sagepub.com/action/showFeed?ui=0&mi=ehikzz&ai=2b4&jc=ajec&type=etoc&feed=rss"
+  },
+  {
+    "name": "Journal of Educational Measurement",
+    "url": "https://onlinelibrary.wiley.com/feed/17453984/most-recent"
+  },
+  {
+    "name": "Contemporary Educational Psychology",
+    "url": "https://rss.sciencedirect.com/publication/science/0361476X"
+  },
+  {
+    "name": "Early Childhood Research Quarterly",
+    "url": "https://rss.sciencedirect.com/publication/science/08852006"
+  },
+  {
+    "name": "Studies in Educational Evaluation",
+    "url": "https://rss.sciencedirect.com/publication/science/1747938X"
+  },
+  {"test":  "test",
+  "url":  "https://rss.sciencedirect.com/publication/science/0361476X"}
+]
