@@ -8,7 +8,7 @@ from datetime import datetime
 import feedparser
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -51,13 +51,21 @@ def init_db():
                 published TEXT,
                 guid TEXT UNIQUE,
                 fetched_at TEXT NOT NULL,
-                read INTEGER DEFAULT 0
+                read INTEGER DEFAULT 0,
+                saved INTEGER DEFAULT 0
             )
             """
         )
         db.execute(
             "CREATE INDEX IF NOT EXISTS idx_published ON articles(published)"
         )
+        # Migration: add 'saved' column for databases created before this
+        # feature existed (Render's disk may already have articles.db).
+        existing_cols = [
+            row["name"] for row in db.execute("PRAGMA table_info(articles)").fetchall()
+        ]
+        if "saved" not in existing_cols:
+            db.execute("ALTER TABLE articles ADD COLUMN saved INTEGER DEFAULT 0")
 
 
 def load_feeds():
@@ -78,13 +86,24 @@ def clean_summary(raw_summary: str, max_len: int = 400) -> str:
 
 
 def fetch_all_feeds():
-    feeds = load_feeds()
+    try:
+        feeds = load_feeds()
+    except Exception as e:
+        print(f"Could not read feeds.json: {e}")
+        return
+
     new_count = 0
     for feed in feeds:
+        name = feed.get("name") if isinstance(feed, dict) else None
+        url = feed.get("url") if isinstance(feed, dict) else None
+        if not name or not url:
+            print(f"Skipping malformed entry in feeds.json (needs 'name' and 'url'): {feed}")
+            continue
+
         try:
-            parsed = feedparser.parse(feed["url"])
+            parsed = feedparser.parse(url)
         except Exception as e:
-            print(f"Error fetching {feed['name']}: {e}")
+            print(f"Error fetching {name}: {e}")
             continue
 
         with get_db() as db:
@@ -125,7 +144,7 @@ def fetch_all_feeds():
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
-                            feed["name"],
+                            name,
                             title,
                             link,
                             summary,
@@ -150,7 +169,10 @@ scheduler = BackgroundScheduler()
 @app.on_event("startup")
 def startup():
     init_db()
-    fetch_all_feeds()  # populate immediately on startup
+    try:
+        fetch_all_feeds()  # populate immediately on startup
+    except Exception as e:
+        print(f"Initial feed fetch failed (app will still start): {e}")
     scheduler.add_job(fetch_all_feeds, "interval", minutes=REFRESH_MINUTES)
     scheduler.start()
 
@@ -162,22 +184,28 @@ def shutdown():
 
 # ---------- Routes ----------
 
-@app.get("/", response_class=HTMLResponse)
-def home(request: Request, journal: str = None, unread_only: bool = False):
-    with get_db() as db:
-        query = "SELECT * FROM articles"
-        conditions = []
-        params = []
-        if journal:
-            conditions.append("journal = ?")
-            params.append(journal)
-        if unread_only:
-            conditions.append("read = 0")
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
-        query += " ORDER BY published DESC LIMIT 200"
-        articles = db.execute(query, params).fetchall()
+def query_articles(journal=None, unread_only=False, saved_only=False):
+    conditions = []
+    params = []
+    if journal:
+        conditions.append("journal = ?")
+        params.append(journal)
+    if unread_only:
+        conditions.append("read = 0")
+    if saved_only:
+        conditions.append("saved = 1")
 
+    query = "SELECT * FROM articles"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY published DESC LIMIT 200"
+    return query, params
+
+
+def render_feed_page(request: Request, view: str, journal, unread_only, saved_only):
+    with get_db() as db:
+        query, params = query_articles(journal, unread_only, saved_only)
+        articles = db.execute(query, params).fetchall()
         journals = [
             row["journal"]
             for row in db.execute(
@@ -193,8 +221,19 @@ def home(request: Request, journal: str = None, unread_only: bool = False):
             "journals": journals,
             "selected_journal": journal,
             "unread_only": unread_only,
+            "view": view,
         },
     )
+
+
+@app.get("/", response_class=HTMLResponse)
+def home(request: Request, journal: str = None, unread_only: bool = False):
+    return render_feed_page(request, "feed", journal, unread_only, False)
+
+
+@app.get("/library", response_class=HTMLResponse)
+def library(request: Request, journal: str = None):
+    return render_feed_page(request, "library", journal, False, True)
 
 
 @app.post("/mark-read/{article_id}")
@@ -204,7 +243,25 @@ def mark_read(article_id: int):
     return {"ok": True}
 
 
+@app.post("/toggle-save/{article_id}")
+def toggle_save(article_id: int):
+    with get_db() as db:
+        row = db.execute(
+            "SELECT saved FROM articles WHERE id = ?", (article_id,)
+        ).fetchone()
+        if row is None:
+            return {"ok": False}
+        new_val = 0 if row["saved"] else 1
+        db.execute(
+            "UPDATE articles SET saved = ? WHERE id = ?", (new_val, article_id)
+        )
+    return {"ok": True, "saved": bool(new_val)}
+
+
 @app.post("/refresh")
-def manual_refresh():
+def manual_refresh(request: Request):
     fetch_all_feeds()
-    return {"ok": True}
+    # Redirect back to wherever the button was clicked from, instead of
+    # showing the raw JSON response.
+    destination = request.headers.get("referer", "/")
+    return RedirectResponse(url=destination, status_code=303)
