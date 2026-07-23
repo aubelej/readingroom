@@ -54,9 +54,31 @@
     font-size: 0.92rem;
   }
 
-  .toolbar{
+  .tabbar{
     max-width: 720px;
     margin: 1.1rem auto 0;
+    padding: 0 1.5rem;
+    display:flex;
+    gap: 1.4rem;
+  }
+  .tab-link{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-decoration:none;
+    color: var(--ink-soft);
+    padding-bottom: 0.4rem;
+    border-bottom: 2px solid transparent;
+  }
+  .tab-link.active{
+    color: var(--ink);
+    border-bottom-color: var(--tab);
+  }
+
+  .toolbar{
+    max-width: 720px;
+    margin: 0.8rem auto 0;
     padding: 0 1.5rem;
     display:flex;
     flex-wrap: wrap;
@@ -172,6 +194,22 @@
     border-bottom: 1px solid var(--tab);
     padding-bottom: 1px;
   }
+  .save-btn{
+    margin-left: auto;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    background: none;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    padding: 0.25rem 0.65rem;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .save-btn.saved{
+    background: var(--tab-soft);
+    border-color: var(--tab);
+    color: var(--tab);
+  }
   .card.unread::before{
     content:"";
     position:absolute;
@@ -199,19 +237,31 @@
   <p class="sub">New articles from your journals, newest first.</p>
 </header>
 
+<div class="tabbar">
+  <a href="/" class="tab-link {{ 'active' if view == 'feed' else '' }}">Feed</a>
+  <a href="/library" class="tab-link {{ 'active' if view == 'library' else '' }}">Library</a>
+</div>
+
 <div class="toolbar">
-  <a href="/" class="chip {{ 'active' if not selected_journal else '' }}">All journals</a>
+  {% set base = '/library' if view == 'library' else '/' %}
+  <a href="{{ base }}" class="chip {{ 'active' if not selected_journal else '' }}">All journals</a>
   {% for j in journals %}
-    <a href="/?journal={{ j | urlencode }}" class="chip {{ 'active' if selected_journal == j else '' }}">{{ j }}</a>
+    <a href="{{ base }}?journal={{ j | urlencode }}" class="chip {{ 'active' if selected_journal == j else '' }}">{{ j }}</a>
   {% endfor %}
+  {% if view == 'feed' %}
   <form method="post" action="/refresh" onsubmit="this.querySelector('button').innerText='Refreshing…'">
     <button type="submit" class="refresh-btn">↻ Refresh now</button>
   </form>
+  {% endif %}
 </div>
 
 <main>
   {% if articles|length == 0 %}
-    <div class="empty">No articles yet — the feed refreshes automatically, or hit "Refresh now" above.</div>
+    {% if view == 'library' %}
+      <div class="empty">Nothing saved yet — tap "☆ Save" on an article in your feed to keep it here.</div>
+    {% else %}
+      <div class="empty">No articles yet — the feed refreshes automatically, or hit "Refresh now" above.</div>
+    {% endif %}
   {% endif %}
 
   {% for a in articles %}
@@ -226,6 +276,9 @@
     {% if a['summary'] %}<div class="summary">{{ a['summary'] }}</div>{% endif %}
     <div class="actions">
       <a href="{{ a['link'] }}" target="_blank" rel="noopener" onclick="markRead({{ a['id'] }})">Read / PDF ↗</a>
+      <button class="save-btn {{ 'saved' if a['saved'] else '' }}" onclick="toggleSave({{ a['id'] }}, this)">
+        {{ '★ Saved' if a['saved'] else '☆ Save' }}
+      </button>
     </div>
   </article>
   {% endfor %}
@@ -236,6 +289,24 @@ function markRead(id){
   fetch(`/mark-read/${id}`, {method: 'POST'});
   const el = document.getElementById(`article-${id}`);
   if(el) el.classList.remove('unread');
+}
+
+const IS_LIBRARY = {{ 'true' if view == 'library' else 'false' }};
+
+async function toggleSave(id, btn){
+  const res = await fetch(`/toggle-save/${id}`, {method: 'POST'});
+  const data = await res.json();
+  if(!data.ok) return;
+
+  if(IS_LIBRARY && !data.saved){
+    // unsaved while viewing the Library — remove the card
+    const card = document.getElementById(`article-${id}`);
+    if(card) card.remove();
+    return;
+  }
+
+  btn.classList.toggle('saved', data.saved);
+  btn.textContent = data.saved ? '★ Saved' : '☆ Save';
 }
 </script>
 
