@@ -30,5 +30,13 @@
   {
   "name":  "Educational Psychology",
   "url":  "https://www.tandfonline.com/feed/rss/cedp20"
+  },
+  {
+  "name":  "Scientific Studies of Reading",
+  "url":  "https://www.tandfonline.com/feed/rss/hssr20"
+  },
+  {
+  "name":  "Developmental Psychology",
+  "url":  "http://content.apa.org/journals/dev.rss"
   }
 ]
