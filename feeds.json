@@ -23,6 +23,12 @@
     "name": "Studies in Educational Evaluation",
     "url": "https://rss.sciencedirect.com/publication/science/1747938X"
   },
-  {"name":  "test",
-  "url":  "https://rss.sciencedirect.com/publication/science/0361476X"}
+  {
+    "name": "AERA Open",
+    "url": "https://journals.sagepub.com/action/showFeed?ui=0&mi=ehikzz&ai=2b4&jc=ero&type=etoc&feed=rss"
+  },
+  {
+  "name":  "Educational Psychology",
+  "url":  "https://www.tandfonline.com/loi/cedp20?af=R"
+  }
 ]
